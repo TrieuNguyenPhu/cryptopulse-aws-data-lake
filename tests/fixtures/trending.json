@@ -1,0 +1,60 @@
+{
+  "coins": [
+    {
+      "item": {
+        "id": "bitcoin",
+        "coin_id": 1,
+        "name": "Bitcoin",
+        "symbol": "BTC",
+        "market_cap_rank": 1,
+        "thumb": "https://example.invalid/bitcoin-thumb.png",
+        "small": "https://example.invalid/bitcoin-small.png",
+        "large": "https://example.invalid/bitcoin-large.png",
+        "slug": "bitcoin",
+        "price_btc": 1,
+        "score": 0,
+        "data": {
+          "price": 65000.125,
+          "price_btc": "1.0",
+          "price_change_percentage_24h": {
+            "usd": 0.78
+          },
+          "market_cap": "$1.28T",
+          "total_volume": "$25B",
+          "content": null
+        }
+      }
+    }
+  ],
+  "nfts": [
+    {
+      "id": "sample-nft",
+      "name": "Sample NFT",
+      "symbol": "SNFT",
+      "thumb": "https://example.invalid/nft.png",
+      "nft_contract_id": 123,
+      "native_currency_symbol": "eth",
+      "floor_price_in_native_currency": 1.25,
+      "floor_price_24h_percentage_change": 2.5,
+      "data": {
+        "floor_price": "1.25 ETH",
+        "content": null
+      }
+    }
+  ],
+  "categories": [
+    {
+      "id": 42,
+      "name": "Layer 1",
+      "top_3_coins_images": ["https://example.invalid/coin.png"],
+      "market_cap_1h_change": 0.5,
+      "slug": "layer-1",
+      "coins_count": "100",
+      "data": {
+        "market_cap": 1000000000000,
+        "market_cap_btc": 15000000,
+        "total_volume": 50000000000
+      }
+    }
+  ]
+}

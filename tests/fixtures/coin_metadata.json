@@ -1,0 +1,25 @@
+{
+  "id": "bitcoin",
+  "symbol": "btc",
+  "name": "Bitcoin",
+  "asset_platform_id": null,
+  "platforms": {"": ""},
+  "detail_platforms": {"": {"decimal_place": null, "contract_address": ""}},
+  "block_time_in_minutes": 10,
+  "hashing_algorithm": "SHA-256",
+  "categories": ["Cryptocurrency", "Layer 1 (L1)"],
+  "description": {"en": "Sanitized Bitcoin metadata fixture."},
+  "links": {
+    "homepage": ["https://example.invalid/bitcoin"],
+    "blockchain_site": ["https://example.invalid/explorer"]
+  },
+  "image": {
+    "thumb": "https://example.invalid/bitcoin-thumb.png",
+    "small": "https://example.invalid/bitcoin-small.png",
+    "large": "https://example.invalid/bitcoin-large.png"
+  },
+  "country_origin": "",
+  "genesis_date": "2009-01-03",
+  "market_cap_rank": 1,
+  "last_updated": "2026-08-04T00:00:00.000Z"
+}
