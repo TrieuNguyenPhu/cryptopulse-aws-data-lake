@@ -1,0 +1,15 @@
+[
+  {
+    "id": "sample-exchange",
+    "name": "Sample Exchange",
+    "year_established": 2017,
+    "country": "Singapore",
+    "description": "Sanitized exchange fixture.",
+    "url": "https://example.invalid/exchange",
+    "image": "https://example.invalid/exchange.png",
+    "has_trading_incentive": false,
+    "trust_score": 9,
+    "trust_score_rank": 1,
+    "trade_volume_24h_btc": 12500.25
+  }
+]

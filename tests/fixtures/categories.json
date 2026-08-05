@@ -1,0 +1,17 @@
+[
+  {
+    "id": "layer-1",
+    "name": "Layer 1 (L1)",
+    "market_cap": 1500000000000.25,
+    "market_cap_change_24h": 1.25,
+    "content": "Base-layer blockchain networks.",
+    "top_3_coins_id": ["bitcoin", "ethereum", "solana"],
+    "top_3_coins": [
+      "https://example.invalid/bitcoin.png",
+      "https://example.invalid/ethereum.png",
+      "https://example.invalid/solana.png"
+    ],
+    "volume_24h": 55000000000.5,
+    "updated_at": "2026-08-04T00:00:00.000Z"
+  }
+]
