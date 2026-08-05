@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "base_url": "https://api.coingecko.com/api/v3",
+  "jobs": {
+    "market_snapshot": {
+      "entity": "market_snapshot",
+      "endpoint": "/coins/markets",
+      "schedule": "cron(0/10 * * * ? *)",
+      "manual_only": false,
+      "criticality": "critical",
+      "parameters": {
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": 250,
+        "page": 1,
+        "sparkline": false,
+        "price_change_percentage": "1h,24h,7d"
+      },
+      "coin_ids": []
+    },
+    "global_market": {
+      "entity": "global_market",
+      "endpoint": "/global",
+      "schedule": "cron(2 * * * ? *)",
+      "manual_only": false,
+      "criticality": "critical",
+      "parameters": {},
+      "coin_ids": []
+    },
+    "trending": {
+      "entity": "trending",
+      "endpoint": "/search/trending",
+      "schedule": "cron(4 * * * ? *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {},
+      "coin_ids": []
+    },
+    "categories": {
+      "entity": "categories",
+      "endpoint": "/coins/categories",
+      "schedule": "cron(6 0/6 * * ? *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {},
+      "coin_ids": []
+    },
+    "exchanges": {
+      "entity": "exchanges",
+      "endpoint": "/exchanges",
+      "schedule": "cron(10 1 * * ? *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {
+        "per_page": 250,
+        "page": 1
+      },
+      "coin_ids": []
+    },
+    "coin_list": {
+      "entity": "coin_list",
+      "endpoint": "/coins/list",
+      "schedule": "cron(15 1 * * ? *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {
+        "include_platform": false,
+        "status": "active"
+      },
+      "coin_ids": []
+    },
+    "coin_metadata": {
+      "entity": "coin_metadata",
+      "endpoint": "/coins/{id}",
+      "schedule": "cron(20 2 ? * SUN *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {
+        "localization": false,
+        "tickers": false,
+        "market_data": false,
+        "community_data": false,
+        "developer_data": false,
+        "sparkline": false
+      },
+      "coin_ids": [
+        "bitcoin",
+        "ethereum",
+        "tether",
+        "binancecoin",
+        "solana",
+        "usd-coin",
+        "ripple",
+        "dogecoin",
+        "cardano",
+        "avalanche-2",
+        "tron",
+        "chainlink",
+        "polkadot",
+        "bitcoin-cash",
+        "stellar",
+        "shiba-inu",
+        "litecoin",
+        "wrapped-bitcoin",
+        "sui",
+        "near"
+      ]
+    },
+    "coin_ohlc": {
+      "entity": "coin_ohlc",
+      "endpoint": "/coins/{id}/ohlc",
+      "schedule": "cron(45 0 * * ? *)",
+      "manual_only": false,
+      "criticality": "non-critical",
+      "parameters": {
+        "vs_currency": "usd",
+        "days": "1"
+      },
+      "coin_ids": [
+        "bitcoin",
+        "ethereum",
+        "tether",
+        "binancecoin",
+        "solana",
+        "usd-coin",
+        "ripple",
+        "dogecoin",
+        "cardano",
+        "avalanche-2"
+      ]
+    },
+    "historical_backfill": {
+      "entity": "historical_market",
+      "endpoint": "/coins/{id}/market_chart",
+      "schedule": null,
+      "manual_only": true,
+      "criticality": "non-critical",
+      "parameters": {
+        "vs_currency": "usd",
+        "days": "365",
+        "interval": "daily"
+      },
+      "coin_ids": [
+        "bitcoin",
+        "ethereum",
+        "tether",
+        "binancecoin",
+        "solana",
+        "usd-coin",
+        "ripple",
+        "dogecoin",
+        "cardano",
+        "avalanche-2"
+      ]
+    }
+  }
+}
