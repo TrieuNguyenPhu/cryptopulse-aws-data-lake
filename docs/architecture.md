@@ -2,9 +2,49 @@
 
 ## Context
 
-CryptoPulse is a single-account, single-region educational deployment in `ap-southeast-1`. It favors managed serverless services, explicit contracts, and low idle cost. All service-to-service traffic uses AWS public service endpoints from AWS-managed runtimes; Lambda is not attached to a VPC, so no NAT Gateway is required.
+CryptoPulse is currently a local-first educational data platform. The AWS account is locked, so AWS deployment and validation are blocked and no AWS feature is considered deployed. Local Phases 3–7 preserve the existing contracts while proving collection, storage, transformation, quality, analytics, and dashboard behavior without AWS credentials or calls.
 
-## Logical architecture
+The existing single-account, single-region `ap-southeast-1` serverless architecture remains the deferred target for Local Phase 8. Its adapters will replace local adapters through ports and dependency injection; it is a design, not a deployed system.
+
+## Active local architecture
+
+```mermaid
+flowchart LR
+  CLI[Explicit local CLI]
+  OLS[Optional local scheduler\ndisabled by default]
+  JR[JobRunner\napplication core]
+  ESP[EnvironmentSecretProvider]
+  CG[CoinGecko Demo REST API\nexplicit opt-in only]
+  BS[LocalBronzeStore\ndata/bronze JSON.gz]
+  CP[LocalCheckpointStore\ndata/checkpoints]
+  MS[LocalMetricsSink]
+  SP[Local PySpark\nBronze to Silver]
+  DQ[Quality + quarantine\ndata/quarantine]
+  GP[Local PySpark\nSilver to Gold]
+  DUCK[DuckDB validation]
+  ST[Streamlit dashboard]
+
+  CLI --> JR
+  OLS -. separate optional PR .-> JR
+  JR --> ESP
+  JR --> CG
+  JR --> BS
+  JR --> CP
+  JR --> MS
+  BS --> SP
+  SP --> DQ
+  SP --> GP
+  GP --> DUCK
+  GP --> ST
+```
+
+`JobRunner` depends on narrow ports for secrets, Bronze writes, checkpoints, metrics, time, and external requests. `EnvironmentSecretProvider`, `LocalBronzeStore`, `LocalCheckpointStore`, and `LocalMetricsSink` are local adapters. Deferred AWS adapters must satisfy the same contracts and are selected only by a composition root; core orchestration and data contracts do not import AWS services.
+
+The local CLI is the only active trigger. Any local scheduler is disabled by default, requires a separate PR, and invokes the same `JobRunner`; it does not introduce a second orchestration path. Live CoinGecko use requires explicit opt-in. Normal tests and CI inject offline transports, and the approved one-request `/ping` smoke does not change that policy.
+
+Local runtime roots are `data/bronze/`, `data/silver/`, `data/gold/`, `data/quarantine/`, and `data/checkpoints/`. They are disposable, local-only, and must remain ignored and untracked.
+
+## Deferred AWS logical architecture
 
 ```mermaid
 flowchart LR
@@ -56,9 +96,9 @@ flowchart LR
   ATH --> ST
 ```
 
-The usage counter is the only stateful service added to the supplied core diagram. It is necessary for an atomic ceiling across concurrent Lambda invocations; logs and CloudWatch metrics are not transactional gates.
+The usage counter is the only stateful service added to the supplied AWS diagram. It would be necessary for an atomic ceiling across concurrent Lambda invocations; logs and CloudWatch metrics are not transactional gates. Nothing in this diagram has been deployed or AWS-validated.
 
-## Collection design
+## Deferred AWS collection design
 
 ### Scheduler
 
@@ -138,9 +178,22 @@ At the ceiling, the handler records a successful suppressed invocation without c
 
 ## Storage design
 
-### Bucket and prefixes
+### Active local paths
 
-One environment-specific bucket uses these prefixes:
+```text
+data/bronze/coingecko/entity=<entity>/year=YYYY/month=MM/day=DD/hour=HH/*.json.gz
+data/silver/table=<table>/snapshot_date=YYYY-MM-DD/run_id=<transform-run-id>/*.snappy.parquet
+data/gold/table=<table>/snapshot_date=YYYY-MM-DD/run_id=<transform-run-id>/*.snappy.parquet
+data/quarantine/table=<table>/snapshot_date=YYYY-MM-DD/run_id=<transform-run-id>/*.json.gz
+data/quarantine/schema-drift/entity=<entity>/detected_date=YYYY-MM-DD/*.json
+data/checkpoints/<adapter-defined-safe-name>.json
+```
+
+`LocalBronzeStore` uses exclusive create semantics: a collision fails and never replaces an earlier successful response. Silver, Gold, and quarantine outputs remain run-scoped so validation can complete before a later adapter publishes a selected run. `LocalCheckpointStore` may atomically replace checkpoint metadata, but checkpoint state is not source data and never changes Bronze. All five `data/` roots remain ignored and untracked.
+
+### Deferred AWS bucket and prefixes
+
+One future environment-specific bucket uses these prefixes:
 
 ```text
 bronze/coingecko/entity=<entity>/year=YYYY/month=MM/day=DD/hour=HH/*.json.gz
@@ -180,7 +233,7 @@ Each HTTP 200 response is immediately wrapped with collection metadata, serializ
 
 ### Bronze to Silver
 
-AWS Glue 5.1 reads a bounded UTC date window from Bronze, parses the immutable envelope with explicit `StructType` definitions, and performs:
+Local PySpark reads a bounded UTC date window from `data/bronze/`, parses the immutable envelope with explicit `StructType` definitions, and performs:
 
 1. Envelope and response-schema validation.
 2. UTC timestamp normalization.
@@ -188,16 +241,16 @@ AWS Glue 5.1 reads a bounded UTC date window from Bronze, parses the immutable e
 4. Reusable quality checks.
 5. Invalid-row quarantine with all failure reasons.
 6. Deterministic deduplication by table business key and documented tie-breaker.
-7. Snappy Parquet write to a new run-scoped location.
-8. Data Catalog partition-location update only after output validation succeeds.
+7. Snappy Parquet write to a new run-scoped location under `data/silver/`.
+8. Local quality-report publication only after output validation succeeds.
 
-No Glue crawler is used. A bounded re-read is simpler and safer than relying on bookmark modification times for late arrivals. For a rebuilt `snapshot_date`, the new complete Parquet output is staged under a new run ID; then that partition's Catalog location is switched to the new prefix. Old run prefixes remain recoverable until lifecycle cleanup.
+A bounded re-read is simpler and safer than relying on modification times for late arrivals. Local Phase 5A implements the transformations; Local Phase 5B adds schema drift, quarantine, reconciliation, missing-window checks, and quality reports. No crawler or AWS service participates.
 
-Local Glue tests use AWS's published `public.ecr.aws/glue/aws-glue-libs:5` image, which covers Glue 5.0, Python 3.11, and Spark 3.5.4. It is the nearest official local compatibility environment, not an assertion of exact Glue 5.1 parity. Exact managed-runtime behavior is an opt-in AWS integration check before deployment.
+The existing Glue 5.0 container check remains an offline compatibility boundary, not evidence that Glue 5.1 is deployed or validated. Deferred AWS publication would add Data Catalog partition-location swaps only after an approved account is available.
 
 ### Silver to Gold
 
-The Gold job starts only after Silver succeeds. It reads Catalog-selected Silver partition locations, computes the eight defined aggregates, runs reconciliation checks, writes new run-scoped Parquet, and updates Gold partition locations. A failed Gold run leaves the previous Catalog locations intact.
+The local Gold job starts only after Silver succeeds. It reads selected local Silver run paths, computes the eight defined aggregates, runs reconciliation checks, and writes new run-scoped Parquet under `data/gold/`. DuckDB validates schemas, business keys, counts, and representative queries. A failed Gold run does not publish its run for dashboard use.
 
 ### Schema evolution and quarantine
 
@@ -208,17 +261,17 @@ The transform compares the observed payload field paths/types with the versioned
 - Batch checks such as missing windows and low market-snapshot counts create quality-result rows even when no individual record can be quarantined.
 - Raw Bronze is never corrected or deleted by a transform.
 
-## Catalog and Athena
+## Deferred Catalog and Athena
 
-Terraform creates databases, table shells, explicit columns, partition keys, and an Athena workgroup. Glue jobs own partition locations after successful transforms. All financial numeric fields use decimal types; partition key `snapshot_date` is low-cardinality and `coin_id` is never a partition key.
+Deferred Terraform source may define databases, table shells, explicit columns, partition keys, and an Athena workgroup. Future Glue jobs would own partition locations after successful transforms. All financial numeric fields use decimal types; partition key `snapshot_date` is low-cardinality and `coin_id` is never a partition key.
 
-The Athena workgroup enforces its S3 result location and encryption. The local Streamlit application uses the caller's AWS credential chain, submits read-only Athena queries, polls results, and displays query/data freshness. It never receives the CoinGecko key.
+Athena SQL remains AWS-unvalidated while the account is locked. Local Phase 7 instead reads validated local Gold Parquet and never receives the CoinGecko key. No source-only Terraform or SQL check can be described as deployment validation.
 
 ## Secrets
 
-Terraform creates only a Secrets Manager secret resource and outputs its ARN; it does not create a secret version. Population is manual or performed by protected CI using a secret that never enters Terraform configuration, variables, plan output, or state.
+Local live commands use `EnvironmentSecretProvider` to read `COINGECKO_API_KEY` from the current process. `.env` is local-only, ignored by Git and Docker, and must remain untracked. Normal tests construct the client with a dummy injected value and a mock transport. The approved `/ping` smoke exposed no key or authenticated headers.
 
-Local development reads `COINGECKO_API_KEY` only when an explicitly allowed live command runs. Normal tests construct the client with a dummy injected value and a mock transport. The source file in the user's Downloads directory is never copied into the repository.
+In Deferred Local Phase 8, Terraform may create only Secrets Manager metadata and output its ARN; it must not create a secret version. A future Secrets Manager adapter would retrieve the value in memory and inject it through the same port. No value may enter Terraform configuration, variables, plan output, state, Lambda environment declarations, logs, or fixtures.
 
 ## IAM boundaries
 
@@ -232,7 +285,7 @@ Separate roles are planned for:
 
 No role receives `s3:*`, `secretsmanager:*`, or account-wide administrative permissions. Resource ARNs and prefix conditions are used wherever the service supports them.
 
-## Terraform layout
+## Deferred Terraform layout
 
 ```text
 terraform/
@@ -245,7 +298,7 @@ terraform/
     └── dev/           # provider, backend, module composition, tfvars example
 ```
 
-AWS Budget creation will be opt-in because notification subscriber addresses are environment-specific. Documentation and cleanup commands remain mandatory even when the resource is disabled.
+This is source-only planning. AWS Budget creation would be opt-in because notification subscriber addresses are environment-specific. Documentation and cleanup commands remain mandatory even when the resource is disabled. No Terraform work may plan or apply against AWS while the account is locked.
 
 ## Tags
 
@@ -260,6 +313,8 @@ Every taggable resource receives:
 
 ## Recovery and replay
 
+- Local recovery first inspects immutable Bronze paths and checkpoint state. If Bronze exists, replay starts at processing and does not call CoinGecko.
+- A failed local transform leaves its run-scoped Silver, Gold, quarantine, or report output unpublished for consumers.
 - A failed collector event is inspected in SQS using only safe metadata.
 - Operators first search the deterministic Bronze prefix and run/request IDs to determine whether a response was already stored.
 - If Bronze exists, replay starts processing only; CoinGecko is not called.

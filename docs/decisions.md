@@ -148,3 +148,31 @@ This is a lightweight decision log. `Accepted` decisions govern implementation u
 - Decision needed: Select a license or intentionally keep the repository unlicensed.
 - Rationale: Licensing is an owner/legal choice, not an implementation default.
 - Consequence: Phase 0 does not create a `LICENSE` file.
+
+## D-022 — Deliver the platform local-first through ports
+
+- Status: Accepted
+- Decision: Implement Local Phases 3–7 with a `JobRunner` that depends on narrow secret, Bronze storage, checkpoint, metrics, clock, and request ports. Use `EnvironmentSecretProvider`, `LocalBronzeStore`, `LocalCheckpointStore`, and `LocalMetricsSink` as the first adapters; replace them later through dependency injection.
+- Rationale: The AWS account is locked, but the collection and data contracts can be implemented and validated locally without coupling the application core to AWS services.
+- Consequence: The existing AWS architecture remains the deferred target rather than being discarded. AWS adapters and a thin Lambda composition adapter belong to Deferred Local Phase 8, and no AWS feature is considered deployed until an approved deployment and AWS validation succeed.
+
+## D-023 — Keep local runtime data outside Git
+
+- Status: Accepted
+- Decision: Store local runtime artifacts only under ignored `data/bronze/`, `data/silver/`, `data/gold/`, `data/quarantine/`, and `data/checkpoints/` roots. Preserve existing logical partitions and run-scoped output contracts.
+- Rationale: Local data can be large and may contain operational context that does not belong in source control. Fixed roots make ignore and secret-scanning policy enforceable.
+- Consequence: `LocalBronzeStore` uses exclusive create semantics for immutable gzip JSON. Checkpoints may use atomic metadata replacement, while Silver, Gold, quarantine, and quality output remains run-scoped. None of these roots may be committed.
+
+## D-024 — Keep local scheduling optional and disabled
+
+- Status: Accepted
+- Decision: The CLI is the active trigger through Local Phase 7. Any local scheduler must be proposed in a separate PR, remain disabled by default, and call the same `JobRunner` boundary.
+- Rationale: Background scheduling adds lifecycle and accidental-live-call risk before it is needed for local validation.
+- Consequence: Installing the project starts no scheduler. Historical backfill remains manual-only, and live CoinGecko use still requires explicit opt-in.
+
+## D-025 — Separate connectivity evidence from deployment evidence
+
+- Status: Accepted
+- Decision: Record the approved one-request CoinGecko `/ping` smoke as passed without retaining sensitive output. Keep normal tests and CI offline. Treat all AWS deployment, Glue/Athena execution, and operational validation as blocked while the account is locked.
+- Rationale: A successful API ping proves only local client and credential connectivity; source code, mocks, containers, and static checks do not prove managed AWS behavior.
+- Consequence: `.env` remains local and untracked. Athena SQL is explicitly AWS-unvalidated. Documentation must not describe any AWS feature as deployed until an approved deployment and validation occur.

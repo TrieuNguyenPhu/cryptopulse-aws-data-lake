@@ -12,28 +12,36 @@ Implemented and reviewed on 2026-08-04: the Python 3.12 project foundation, revi
 
 Implemented on 2026-08-04: one synchronous allow-listed `httpx` client, explicit timeouts, stable run/request IDs, monotonic latency, an injected pre-attempt budget hook, typed error mapping, permanent-4xx fail-fast behavior, bounded exponential backoff with jitter, numeric/HTTP-date `Retry-After`, and offline MockTransport coverage. Phase 3 collection, durable usage counting, S3 writes, and Lambda behavior are intentionally absent.
 
+## Local-first roadmap status
+
+The AWS account is locked, so deployment and AWS validation are blocked. No AWS feature is considered deployed. The next approved work is Local Phases 3–7, using filesystem, process-environment, PySpark, DuckDB, and Streamlit adapters behind ports. Deferred Local Phase 8 may add AWS adapters, a Lambda composition adapter, and Terraform source only after separate approval; no AWS call or resource creation belongs to the active roadmap.
+
+One explicitly authorized CoinGecko `/ping` smoke test passed with one request. It established local credential and client connectivity only; it did not validate collection jobs, AWS services, deployment, or Athena. The key remains local in ignored `.env`, and normal tests and CI remain offline.
+
 ## Goal and guardrails
 
-CryptoPulse will be a serverless, micro-batch AWS data platform that:
+CryptoPulse will first be a local, micro-batch data platform with replaceable adapters that:
 
 1. Collects only supported CoinGecko Demo REST API data.
-2. Writes each successful response once to immutable-by-design S3 Bronze storage.
-3. Produces validated Silver and analytical Gold Parquet datasets with AWS Glue PySpark.
-4. Publishes explicit schemas to Glue Data Catalog for Athena.
-5. Serves a local, read-only Streamlit dashboard with visible CoinGecko attribution.
+2. Writes each successful response once to immutable-by-design local Bronze storage.
+3. Produces validated Silver and analytical Gold Parquet datasets with local PySpark.
+4. Validates local analytical outputs and queries with DuckDB.
+5. Serves a local, read-only Streamlit dashboard over Gold Parquet with visible CoinGecko attribution.
+
+The existing AWS architecture remains the deferred target. Ports and dependency injection will allow local secret, Bronze, checkpoint, and metric adapters to be replaced later by AWS adapters without changing the core `JobRunner` or data contracts.
 
 It will not trade, advise on investments, stream data, or introduce unrequested infrastructure. Specifically excluded are Kinesis, Firehose, ECS, EC2, RDS, API Gateway, NAT Gateway, Kubernetes, QuickSight, WebSocket, and Webhook integrations.
 
 ## Assumptions
 
-- AWS account access, a Terraform remote-state approach, and GitHub OIDC deployment roles will be supplied before deployment.
+- The AWS account is locked. Account access, a Terraform remote-state approach, and GitHub OIDC deployment roles must be supplied and separately approved before deployment or AWS validation.
 - The repository directory is the repository root even though its local folder name differs from `cryptopulse-aws-data-lake`.
 - Python 3.12 is used for local development, tests, packaging, and Lambda. AWS Glue 5.1 currently runs Spark 3.5.6 with Python 3.11, so Glue scripts remain Python 3.11-compatible. AWS currently publishes its local Docker image for Glue 5.0/Spark 3.5.4; that image provides compatibility coverage, while exact 5.1 parity is verified later by opt-in AWS integration tests.
 - All schedules and timestamps use UTC. EventBridge Scheduler flexible time windows are disabled.
-- `COINGECKO_API_KEY` is the local client default. In AWS, the Lambda adapter retrieves the value at runtime from Secrets Manager and passes it directly to the same injected client because Terraform must not place the value in Lambda environment state.
+- `COINGECKO_API_KEY` is read locally only through `EnvironmentSecretProvider` from the current process. `.env` remains local and untracked. In deferred AWS work, a Secrets Manager adapter will pass the value directly to the same injected client because Terraform must not place the value in Lambda environment state.
 - The supplied top-ten coin IDs are authoritative for OHLC and backfill. The remaining ten IDs for weekly metadata are an explicit Phase 1 configuration decision and will be validated against `/coins/list` before deployment.
-- One private S3 bucket with `bronze/`, `silver/`, `gold/`, `quarantine/`, and `athena-results/` prefixes is sufficient for this portfolio workload. IAM isolates access by prefix.
-- Daily transformation is the cost-conscious default. Collection remains micro-batch at the requested frequencies; Bronze-to-Silver runs daily, followed by Silver-to-Gold only on success.
+- Local runtime data uses ignored `data/bronze/`, `data/silver/`, `data/gold/`, `data/quarantine/`, and `data/checkpoints/` paths. The deferred AWS target remains one private S3 bucket with prefix-level IAM isolation.
+- Local execution is explicit through the CLI. Any optional local scheduler is disabled by default and must be implemented in a separate PR. Bronze-to-Silver runs before Silver-to-Gold, and Gold never publishes after a failed Silver or quality run.
 - CoinGecko's external developer dashboard remains the source of truth for billed usage. The platform counter is intentionally conservative and counts every outbound attempt.
 
 ## Verified CoinGecko API contract
@@ -103,63 +111,75 @@ CoinGecko currently documents that only HTTP 200 responses consume monthly credi
 - Test solely through `httpx.MockTransport` or `respx`.
 - Exit criterion: the error/retry matrix and no-secret logging tests pass.
 
-### Phase 3 — Collector and Bronze storage
+### Local Phase 3 — Ports, JobRunner, CLI, and environment secrets
 
-- Route a validated EventBridge job event through one Lambda handler.
-- Resolve the AWS secret in memory, reserve budget atomically, fetch once, build the envelope, gzip it, and create a unique S3 object.
-- Keep HTTP retry scope separate from S3 SDK retry scope so S3 failures never call CoinGecko again within the invocation.
-- Configure zero Lambda asynchronous function retries; exhausted S3 failures go to SQS rather than re-fetching a successful API response.
-- Add S3 tests with moto and replay/idempotency tests.
-- Exit criterion: all collection jobs produce contract-valid Bronze objects using fixtures, and failure tests prove no refetch after S3 errors.
+- Define narrow storage, checkpoint, metrics, secret, and clock ports around existing domain contracts.
+- Implement `JobRunner` as the application orchestrator and compose it with `EnvironmentSecretProvider` in a local CLI.
+- Keep job names, endpoints, and parameters allow-listed. Keep scoped calls sequential and backfill manual-only.
+- Require explicit live opt-in for any real CoinGecko request; fixtures and injected transports remain the default.
+- Exit criterion: CLI and runner tests prove deterministic orchestration, redaction, and no refetch after a post-HTTP storage failure.
 
-### Phase 4 — Terraform core and collection deployment
+### Local Phase 4A — LocalBronzeStore
 
-- Implement storage, secret metadata, usage counter, Lambda, Scheduler, SQS DLQ, alarms, logs, and least-privilege IAM modules.
-- Configure encryption, S3 public-access block, versioning, Bronze lifecycle, create-only collector permissions, log retention, and mandatory tags.
-- Add dev environment variables and outputs without secret values.
-- Run `terraform fmt`, `terraform validate`, TFLint, and Checkov.
-- Exit criterion: static validation succeeds and the plan contains no secret value or prohibited service.
+- Implement create-only immutable gzip JSON writes under `data/bronze/` using the existing Bronze envelope and key contracts.
+- Preserve successful response bytes in memory across storage handling; a storage failure must not trigger another API call.
+- Add filesystem, collision, gzip, partition, and failure-path tests.
+- Exit criterion: local Bronze artifacts are contract-valid, immutable, ignored, and untracked.
 
-### Phase 5 — Silver and data quality
+### Local Phase 4B — LocalCheckpointStore and LocalMetricsSink
 
-- Implement explicit Spark schemas, schema-drift comparison, deterministic deduplication, decimal casts, UTC normalization, bounded partition rebuilds, and generic quarantine records.
-- Publish the eight requested Silver tables through explicit Data Catalog definitions; no crawler.
-- Implement all required quality and collection-window checks.
-- Exit criterion: local Spark tests and schema contracts pass against sanitized fixtures.
+- Implement atomic local checkpoint metadata under `data/checkpoints/` and a secret-safe local metrics sink.
+- Preserve run/request identity, attempt-budget events, restart behavior, and corruption visibility without cloud services.
+- Exit criterion: restart, duplicate, corruption, and redaction tests pass and no local state is tracked.
 
-### Phase 6 — Gold analytics
+### Optional local scheduler — separate PR
 
-- Implement the eight requested Gold datasets as deterministic Silver-to-Gold transforms.
-- Add reconciliation tests from Bronze counts through Silver accepted/quarantined counts to Gold aggregates.
-- Exit criterion: Gold fixtures produce stable expected rows and quality summaries.
+- Keep scheduling disabled by default. Explicit CLI execution is the supported path through Local Phase 7.
+- If separately approved, implement a scheduler adapter behind the trigger boundary without changing `JobRunner`.
+- Exit criterion: scheduler installation alone starts nothing, enablement is explicit, and backfill remains manual-only.
 
-### Phase 7 — Athena and Streamlit
+### Local Phase 5A — Bronze to Silver
 
-- Add Athena workgroup, encrypted query-result prefix, saved SQL, and a local read-only Streamlit dashboard.
-- Add visible `Data provided by CoinGecko` attribution and educational/non-investment disclaimer in the dashboard.
-- Exit criterion: Athena smoke queries and dashboard startup checks pass without exposing credentials.
+- Implement existing explicit schemas, deterministic deduplication, decimal casts, UTC normalization, and bounded local partition rebuilds in PySpark.
+- Read local Bronze and write run-scoped Parquet under `data/silver/`; preserve all eight Silver contracts.
+- Exit criterion: local Spark schema, boundary, and deduplication tests pass against sanitized fixtures.
 
-### Phase 8 — CI/CD and operations
+### Local Phase 5B — Data quality and quarantine
 
-- Add PR checks for Ruff, MyPy, Pytest/coverage, Terraform fmt/validate, TFLint, Checkov, Trivy, and secret scanning.
-- Add main workflow for Lambda artifact build, Terraform plan, protected-environment manual approval, apply, and smoke tests through GitHub OIDC.
-- Complete the runbook, AWS Budget setup documentation, cost analysis, disaster/replay procedures, and cleanup commands.
-- Exit criterion: workflows lint successfully and a dry-run deployment checklist is complete.
+- Implement schema-drift comparison, row/batch checks, count reconciliation, missing-window checks, generic quarantine records, and deterministic quality reports.
+- Write ignored local artifacts under `data/quarantine/`; never include credentials or headers.
+- Exit criterion: quarantine, drift, reconciliation, and quality-report contracts pass.
 
-### Phase 9 — Integration and portfolio hardening
+### Local Phase 6 — Gold analytics and DuckDB validation
 
-- Run opt-in AWS integration tests under an explicit flag and a separately authorized Demo API smoke test capped to one known request.
-- Validate alarms, DLQ behavior, partition discovery, Athena queries, budget suppression, cleanup, and README evidence.
-- Exit criterion: final acceptance checklist passes and all known limitations are documented.
+- Implement the eight existing Gold datasets as deterministic Silver-to-Gold PySpark transforms under `data/gold/`.
+- Validate schemas, business keys, counts, representative analytics, and Bronze/Silver/Gold reconciliation with DuckDB.
+- Keep Athena SQL as source-only and explicitly AWS-unvalidated.
+- Exit criterion: Gold fixtures and DuckDB checks produce stable expected results.
+
+### Local Phase 7 — Streamlit over local Gold Parquet
+
+- Implement a local read-only data adapter and Streamlit dashboard over validated Gold Parquet.
+- Add freshness, CoinGecko attribution, and educational/non-investment disclaimers without requiring the API key.
+- Exit criterion: dashboard unit/startup tests pass without live HTTP or AWS access.
+
+### Deferred Local Phase 8 — AWS adapters, Lambda, and Terraform source only
+
+- After separate approval, implement AWS Secrets Manager, S3, DynamoDB, CloudWatch, and event-source adapters behind the same ports.
+- Add a thin Lambda adapter that composes `JobRunner`; retain separate HTTP/storage retry boundaries and zero-refetch behavior.
+- Add Terraform source for the existing private serverless target, but do not deploy or claim validation while the account is locked.
+- Keep secret values outside Terraform state, retain least-privilege/tagging requirements, and keep Athena SQL marked AWS-unvalidated.
+- Exit criterion before account unlock: source-only static checks pass without credentials or AWS calls. Deployment, Glue/Athena checks, alarms, DLQ validation, and cleanup evidence remain blocked.
 
 ## Test policy
 
 - Tests run after every implementation phase. Work stops on the first failing required check.
 - Unit and contract tests categorically block live HTTP by using injected transports.
-- Integration tests require `CRYPTOPULSE_RUN_INTEGRATION=1`; live CoinGecko smoke additionally requires a separate `CRYPTOPULSE_ALLOW_LIVE_API=1` flag and is never part of normal CI.
+- Integration tests require `CRYPTOPULSE_RUN_INTEGRATION=1`; live CoinGecko access additionally requires `CRYPTOPULSE_ALLOW_LIVE_API=1` and separate authorization. The approved one-request `/ping` smoke passed, but live checks are never part of normal CI.
+- `.env` must remain local, ignored, and untracked. Local data and checkpoints under `data/` must also remain ignored and untracked.
 - Sanitized fixtures contain no headers, request URLs with keys, account identifiers, or raw secrets.
 - Coverage begins with a practical 85% line threshold and can increase only when it adds meaningful protection.
-- PySpark transformations are tested against the Glue-compatible Spark/Python matrix, while application code remains Python 3.12.
+- Local PySpark transformations run without AWS credentials or calls. Glue-container compatibility may remain an offline boundary check, but exact Glue/Athena behavior is AWS-unvalidated while the account is locked.
 
 ## Principal risks and mitigations
 
@@ -168,6 +188,9 @@ CoinGecko currently documents that only HTTP 200 responses consume monthly credi
 | CoinGecko response schema changes | Dropped or invalid Silver data | Preserve raw payload, explicit schemas, drift manifests, contract fixtures, quarantine incompatible rows |
 | Shared key use outside CryptoPulse | Counter underestimates billed usage | Conservative attempt counter, warnings, CoinGecko dashboard reconciliation and account alerts |
 | Retries amplify call volume | Ceiling reached early | Four-attempt maximum, jitter, `Retry-After`, atomic pre-attempt cap, no permanent-4xx retry |
+| Local runtime artifacts are committed | Data volume or sensitive operational context enters Git | Ignore all local data/checkpoint roots, scan tracked files, and keep `.env` local and untracked |
+| Local adapter behavior diverges from future AWS adapters | Deployment changes domain behavior | Define narrow ports now and replace adapters through dependency injection with shared contract tests |
+| AWS account remains locked | Deployment, Glue, Athena, and operational validation cannot run | Keep Local Phase 8 source-only and label every AWS claim and Athena SQL as unvalidated |
 | S3 failure after successful HTTP | Duplicate paid request or lost raw response | Independent S3 retries with response held in memory, zero Lambda function retries, DLQ/manual recovery |
 | Scheduler DLQ does not represent every Lambda code failure | Missing failure visibility | Configure both Scheduler target DLQ handling and Lambda asynchronous failure destination/DLQ metrics |
 | Plain Parquet has no row-level merge | Duplicate or inconsistent reruns | Rebuild bounded affected date partitions into run-scoped prefixes, then publish validated Catalog partition locations |
