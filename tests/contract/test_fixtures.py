@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cryptopulse.bronze import count_records
-from cryptopulse.jobs import load_job_catalog
+from cryptopulse.jobs import JOB_CATALOG
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures"
 FIXTURE_BY_JOB = {
@@ -38,7 +38,7 @@ def test_each_job_has_a_countable_sanitized_fixture(job_name: str, fixture_name:
 def test_configured_coin_ids_exist_in_coin_list_fixture() -> None:
     coin_list = json.loads((FIXTURE_DIR / "coin_list.json").read_text(encoding="utf-8"))
     fixture_ids = {coin["id"] for coin in coin_list}
-    catalog = load_job_catalog()
+    catalog = JOB_CATALOG
 
     assert len(fixture_ids) == 20
     assert set(catalog.get("coin_metadata").coin_ids) == fixture_ids

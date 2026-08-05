@@ -46,4 +46,4 @@ glue-test:
 	docker run --rm --network none -v "$(CURDIR):/home/hadoop/workspace" --workdir /home/hadoop/workspace $(GLUE_IMAGE) -c "python3 -m pytest tests/glue"
 
 clean:
-	$(PYTHON) -c "from pathlib import Path; import shutil; [shutil.rmtree(Path(p), ignore_errors=True) for p in ('.pytest_cache','.mypy_cache','.ruff_cache','build','dist','htmlcov')]"
+	$(PYTHON) -c "from pathlib import Path; import shutil; paths=[*(Path(p) for p in ('.pytest_cache','.mypy_cache','.ruff_cache','.coverage','coverage.xml','build','dist','htmlcov')), *Path('src').glob('*.egg-info')]; [shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True) for path in paths]"

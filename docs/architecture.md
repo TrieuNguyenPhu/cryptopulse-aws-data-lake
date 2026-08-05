@@ -50,7 +50,7 @@ Local runtime roots are `data/bronze/`, `data/silver/`, `data/gold/`, `data/quar
 flowchart LR
   CG[CoinGecko Demo REST API]
   SCH[EventBridge Scheduler]
-  L[Python 3.12 Lambda collector]
+  L[Python 3.14 Lambda collector]
   SEC[Secrets Manager\nsecret metadata + runtime value]
   U[DynamoDB\nmonthly attempt counter]
   DLQ[SQS standard DLQ]

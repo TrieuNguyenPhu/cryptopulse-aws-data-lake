@@ -505,4 +505,4 @@ In Deferred Local Phase 8, the same contract maps to an S3 run-scoped prefix fol
 5. Incompatible type or decimal overflow: quarantine; never coerce through a string/double round trip.
 6. Renames/removals: treat as breaking until a reviewed mapping and fixture are committed.
 
-Every schema change updates this document, the explicit Spark/Data Catalog schema, sanitized fixtures, contract tests, and `docs/decisions.md` when it changes a modeling decision.
+Every schema change updates this document, the explicit Spark/Data Catalog schema, sanitized fixtures, and contract tests.

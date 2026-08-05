@@ -17,7 +17,7 @@ import httpx
 
 from cryptopulse.bronze import JsonValue
 from cryptopulse.config import COINGECKO_BASE_URL
-from cryptopulse.jobs import JobCatalog, ParameterValue, load_job_catalog
+from cryptopulse.jobs import JOB_CATALOG, JobCatalog, ParameterValue
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=15.0, pool=5.0)
 MAX_RETRIES = 3
@@ -186,7 +186,7 @@ class CoinGeckoClient:
             raise ValueError("backoff_seconds must be finite and non-negative")
 
         self._api_key = normalized_key
-        self._catalog = load_job_catalog() if catalog is None else catalog
+        self._catalog = JOB_CATALOG if catalog is None else catalog
         self._timeout = timeout
         self._max_retries = max_retries
         self._backoff_seconds = backoff_seconds
@@ -236,7 +236,7 @@ class CoinGeckoClient:
             requested_at = _utc(self._now(), "now")
             started = self._monotonic()
             self._log(logging.INFO, "coingecko_request_started", request, context)
-            terminal_transport_error: TransportError | None = None
+            transport_error: TransportError | None = None
             try:
                 response = self._http.get(
                     url,
@@ -257,7 +257,7 @@ class CoinGeckoClient:
                     latency_ms=latency_ms,
                 )
                 if attempt > self._max_retries:
-                    terminal_transport_error = TransportError(
+                    transport_error = TransportError(
                         "CoinGecko transport failed",
                         request=request,
                         run_id=canonical_run_id,
@@ -267,8 +267,8 @@ class CoinGeckoClient:
                 else:
                     self._schedule_retry(request, context, retry_after=None)
                     continue
-            if terminal_transport_error is not None:
-                raise terminal_transport_error
+            if transport_error is not None:
+                raise transport_error
 
             received_at = _utc(self._now(), "now")
             latency_ms = _latency_ms(started, self._monotonic())
@@ -390,7 +390,7 @@ def parse_retry_after(value: str | None, now: datetime) -> float | None:
     except ValueError:
         try:
             instant = parsedate_to_datetime(text)
-        except (TypeError, ValueError, OverflowError):
+        except TypeError, ValueError, OverflowError:
             return None
         if instant.tzinfo is None:
             instant = instant.replace(tzinfo=UTC)

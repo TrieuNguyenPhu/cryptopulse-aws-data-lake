@@ -7,40 +7,37 @@ name = "cryptopulse-aws-data-lake"
 version = "0.1.0"
 description = "Serverless CoinGecko Demo API data lake on AWS"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.14,<3.15"
 authors = [{ name = "NguyenPhuTrieu" }]
 dependencies = [
-  "boto3>=1.35,<2",
-  "httpx>=0.28,<1",
+  "httpx>=0.28.1,<1",
 ]
+
+[project.urls]
+Repository = "https://github.com/TrieuNguyenPhu/cryptopulse-aws-data-lake"
 
 [project.optional-dependencies]
 dev = [
-  "build>=1.2,<2",
-  "moto[dynamodb,s3]>=5,<6",
-  "mypy>=1.14,<2",
-  "pre-commit>=4,<5",
-  "pytest>=8.3,<10",
-  "pytest-cov>=6,<8",
-  "respx>=0.22,<1",
-  "ruff>=0.9,<1",
+  "build>=1.5,<2",
+  "mypy>=2.3,<3",
+  "pre-commit>=4.6,<5",
+  "pytest>=9.1,<10",
+  "pytest-cov>=7.1,<8",
+  "ruff>=0.16,<1",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP"]
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"]
-
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 files = ["src"]
 

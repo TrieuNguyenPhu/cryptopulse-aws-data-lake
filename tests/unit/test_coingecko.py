@@ -26,7 +26,7 @@ from cryptopulse.coingecko import (
     prepare_request,
 )
 from cryptopulse.config import COINGECKO_BASE_URL
-from cryptopulse.jobs import load_job_catalog
+from cryptopulse.jobs import JOB_CATALOG
 from cryptopulse.logging import configure_json_logging
 
 API_KEY = "fixture-super-secret"
@@ -67,7 +67,7 @@ def make_client(
 def test_prepare_request_covers_every_allowlisted_endpoint(
     job_name: str, coin_id: str | None, endpoint: str
 ) -> None:
-    request = prepare_request(load_job_catalog(), job_name, coin_id=coin_id)
+    request = prepare_request(JOB_CATALOG, job_name, coin_id=coin_id)
 
     assert request.endpoint == endpoint
     assert "x-cg-demo-api-key" not in request.parameters
@@ -75,7 +75,7 @@ def test_prepare_request_covers_every_allowlisted_endpoint(
 
 
 def test_prepare_request_rejects_invalid_scope_usage() -> None:
-    catalog = load_job_catalog()
+    catalog = JOB_CATALOG
 
     with pytest.raises(ValueError, match="requires coin_id"):
         prepare_request(catalog, "coin_metadata")
