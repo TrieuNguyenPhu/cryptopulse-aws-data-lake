@@ -2,7 +2,7 @@ PYTHON ?= python
 IMAGE ?= cryptopulse-dev
 GLUE_IMAGE ?= public.ecr.aws/glue/aws-glue-libs:5
 
-.PHONY: install format lint typecheck unit contract test coverage integration build docker-build docker-test glue-test clean
+.PHONY: install format lint typecheck unit contract test coverage integration build collect build-data dashboard docker-build docker-test glue-test clean
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -35,6 +35,15 @@ integration:
 
 build:
 	$(PYTHON) -m build
+
+collect:
+	$(PYTHON) -m cryptopulse collect all
+
+build-data:
+	$(PYTHON) -m cryptopulse build
+
+dashboard:
+	$(PYTHON) -m cryptopulse dashboard
 
 docker-build:
 	docker build --tag $(IMAGE) .

@@ -31,6 +31,7 @@ crash.log
 
 # Local data and tools
 .codegraph/
+.impeccable/
 .idea/
 .vscode/
 .DS_Store
