@@ -53,126 +53,109 @@ Legend: `[ ]` pending, `[x]` complete. A phase is complete only when its require
 - [x] Run the complete Phase 2 check suite.
 - [x] Update README/TASKS and report Phase 2.
 
-## Phase 3 — Lambda collector and Bronze
+## Local Phase 3 — Application ports and JobRunner
 
-- [ ] Implement validated `job_name` routing.
-- [ ] Implement local environment and AWS Secrets Manager credential providers.
-- [ ] Implement DynamoDB attempt reservation and thresholds at 7,000/8,500/9,000.
-- [ ] Implement suppression results without external calls at the ceiling.
-- [ ] Implement one-response-at-a-time Bronze envelope and gzip flow.
-- [ ] Implement unique conditional-create S3 keys.
-- [ ] Separate API retry from S3 SDK retry and hold successful response bytes in memory.
-- [ ] Implement all scheduled jobs and manual-only backfill routing.
-- [ ] Implement sequential scoped requests for metadata/OHLC/backfill.
-- [ ] Add Lambda handler tests and moto S3/DynamoDB tests.
-- [ ] Prove an S3 failure after HTTP 200 causes zero additional HTTP calls.
-- [ ] Prove unit/contract tests consume zero live API credits.
-- [ ] Run the complete Phase 3 check suite.
-- [ ] Update README/TASKS and report Phase 3.
+- [ ] Define narrow ports for Bronze storage, checkpoints, metrics, secrets, and clocks.
+- [ ] Implement a transport-independent `JobRunner` that orchestrates validated jobs through injected ports.
+- [ ] Implement `EnvironmentSecretProvider`; read `COINGECKO_API_KEY` from process environment only.
+- [ ] Add a local CLI for explicit single-job execution and manual-only backfill routing.
+- [ ] Keep live CoinGecko access behind explicit opt-in; default CLI/test behavior remains offline.
+- [ ] Keep scoped metadata, OHLC, and backfill requests sequential.
+- [ ] Prove storage failure after HTTP 200 causes zero additional HTTP calls.
+- [ ] Prove unit, contract, and normal integration tests consume zero live API credits.
+- [ ] Run the complete Local Phase 3 check suite.
+- [ ] Update README/TASKS and report Local Phase 3 without starting Phase 4A.
 
-## Phase 4 — Terraform collection platform
+## Local Phase 4A — Immutable local Bronze storage
 
-- [ ] Add Terraform provider/version constraints and dev environment composition.
-- [ ] Implement storage module with public-access block, TLS-only, encryption, versioning, and lifecycle.
-- [ ] Implement secret metadata only; do not create secret value/version in Terraform.
-- [ ] Implement on-demand usage-counter table with TTL and encryption.
-- [ ] Build reproducible Lambda zip artifact outside Terraform state.
-- [ ] Implement Lambda, log group, zero async retry, and SQS failure handling.
-- [ ] Implement all requested EventBridge Scheduler resources and manual-only omission for backfill.
-- [ ] Implement SQS standard DLQ, queue policy, encryption, retention, and alarms.
-- [ ] Implement least-privilege IAM and required tags.
-- [ ] Add outputs that contain no secrets.
-- [ ] Add `terraform.tfvars.example` with non-secret values only.
-- [ ] Run Terraform fmt/validate, TFLint, Checkov, and Trivy where applicable.
-- [ ] Inspect plan for prohibited services, public access, wildcard privileges, and secret values.
-- [ ] Update README/TASKS and report Phase 4.
+- [ ] Implement `LocalBronzeStore` behind the Bronze storage port.
+- [ ] Write one immutable gzip JSON document per successful response under `data/bronze/`.
+- [ ] Preserve the existing Bronze envelope, record-count, filename, and partition contracts.
+- [ ] Use create-only writes and fail rather than replace an existing path.
+- [ ] Keep successful response bytes in memory across local storage retries; never refetch after HTTP 200.
+- [ ] Add local filesystem contract, immutability, gzip, and failure-path tests.
+- [ ] Confirm `data/bronze/` remains ignored and untracked.
+- [ ] Run the complete Local Phase 4A check suite.
 
-## Phase 5 — Silver and data quality
+## Local Phase 4B — Local checkpoints and metrics
+
+- [ ] Implement `LocalCheckpointStore` under `data/checkpoints/` with atomic replacement of checkpoint metadata.
+- [ ] Implement `LocalMetricsSink` with secret-safe structured events and no cloud dependency.
+- [ ] Preserve run/request identity and attempt-budget signals across local adapters.
+- [ ] Add restart, duplicate-run, corruption, and redaction tests.
+- [ ] Confirm `data/checkpoints/` remains ignored and untracked.
+- [ ] Run the complete Local Phase 4B check suite.
+
+## Optional local scheduler — separate PR, disabled by default
+
+- [ ] Do not start this work automatically or combine it with Local Phase 4B.
+- [ ] If separately approved, add a local scheduler adapter behind the same job-trigger boundary.
+- [ ] Require an explicit enable flag; default installation and normal tests schedule nothing.
+- [ ] Keep `historical_backfill` manual-only.
+
+## Local Phase 5A — Bronze-to-Silver PySpark
 
 - [ ] Add reusable explicit Spark schemas for every Bronze response and Silver table.
 - [ ] Implement envelope validation and safe UTC/decimal conversion helpers.
-- [ ] Implement observed-vs-expected schema fingerprint/drift manifests.
-- [ ] Implement reusable row/batch quality result model.
-- [ ] Implement generic quarantine writer with all failure reasons.
-- [ ] Implement `silver_market_snapshots`.
-- [ ] Implement `silver_global_market`.
-- [ ] Implement `silver_trending_assets`.
-- [ ] Implement `silver_categories`.
-- [ ] Implement `silver_exchanges`.
-- [ ] Implement `silver_coin_metadata`.
-- [ ] Implement `silver_coin_ohlc`.
-- [ ] Implement `silver_historical_market`.
+- [ ] Implement all eight existing Silver table contracts.
 - [ ] Implement deterministic business-key deduplication.
+- [ ] Read bounded local Bronze paths and write run-scoped Parquet under `data/silver/`.
+- [ ] Add Spark unit, boundary, schema, and deduplication tests using sanitized fixtures.
+- [ ] Confirm `data/silver/` remains ignored and untracked.
+- [ ] Run the complete Local Phase 5A check suite.
+
+## Local Phase 5B — Data quality, quarantine, and reports
+
+- [ ] Implement observed-vs-expected schema fingerprint and drift reports.
+- [ ] Implement the existing reusable row/batch quality result model.
+- [ ] Implement generic quarantine output with all failure reasons under `data/quarantine/`.
 - [ ] Implement missing-window, stale-source, scoped-completeness, and count-reconciliation checks.
-- [ ] Implement run-scoped Parquet writes and validated Catalog partition-location updates.
-- [ ] Add Spark unit, boundary, dedup, quarantine, drift, and contract tests.
-- [ ] Add Terraform processing module, Glue roles/jobs, and explicit Catalog schemas.
-- [ ] Run Python/Spark tests and Terraform/static checks.
-- [ ] Update README/TASKS and report Phase 5.
+- [ ] Produce deterministic local quality reports without AWS services.
+- [ ] Add quarantine, drift, reconciliation, and report contract tests.
+- [ ] Confirm `data/quarantine/` remains ignored and untracked.
+- [ ] Run the complete Local Phase 5B check suite.
 
-## Phase 6 — Gold analytics
+## Local Phase 6 — Gold analytics and DuckDB validation
 
-- [ ] Implement `gold_market_overview_hourly`.
-- [ ] Implement `gold_daily_coin_performance`.
-- [ ] Implement `gold_market_rank_movements`.
-- [ ] Implement `gold_category_performance`.
-- [ ] Implement `gold_trending_followthrough` with nearest-observation tolerance.
-- [ ] Implement `gold_exchange_rankings`.
-- [ ] Implement `gold_market_dominance`.
-- [ ] Implement `gold_data_quality_summary`.
+- [ ] Implement the eight existing Gold table contracts as deterministic Silver-to-Gold transforms.
+- [ ] Write run-scoped Gold Parquet under `data/gold/` only after Silver and quality checks pass.
+- [ ] Validate Gold schemas, counts, business keys, and representative queries with DuckDB.
 - [ ] Add stable aggregate fixtures and Bronze/Silver/Gold reconciliation tests.
-- [ ] Add Silver-success-only Gold trigger.
-- [ ] Run the complete Phase 6 check suite.
-- [ ] Update README/TASKS and report Phase 6.
+- [ ] Keep Athena SQL as source-only and explicitly AWS-unvalidated.
+- [ ] Confirm `data/gold/` remains ignored and untracked.
+- [ ] Run the complete Local Phase 6 check suite.
 
-## Phase 7 — Athena and local Streamlit dashboard
+## Local Phase 7 — Streamlit over local Gold Parquet
 
-- [ ] Add Athena workgroup and encrypted/lifecycle-managed result prefix.
-- [ ] Add data validation and portfolio analytics SQL queries.
-- [ ] Add query examples for all Gold tables.
-- [ ] Implement local read-only Streamlit Athena client with testable injection.
+- [ ] Implement a local read-only Streamlit data adapter over Gold Parquet, validated with DuckDB.
 - [ ] Add market overview, performance, ranks, categories, trending, exchanges, dominance, and quality views.
 - [ ] Display last-updated/data-freshness status.
-- [ ] Display `Data provided by CoinGecko` with direct API link.
-- [ ] Display educational/non-commercial/non-investment disclaimer.
-- [ ] Prove no CoinGecko key is required or exposed by the dashboard.
-- [ ] Run SQL smoke checks, dashboard unit tests, and startup smoke test.
-- [ ] Update README/TASKS and report Phase 7.
+- [ ] Display `Data provided by CoinGecko` with a direct API link.
+- [ ] Display the educational/non-commercial/non-investment disclaimer.
+- [ ] Prove the dashboard neither requires nor exposes the CoinGecko key.
+- [ ] Run dashboard unit and startup smoke tests without live HTTP or AWS.
+- [ ] Run the complete Local Phase 7 check suite.
 
-## Phase 8 — CI/CD and operations
+## Deferred Local Phase 8 — AWS adapters and infrastructure source
 
-- [ ] Add PR workflow: Ruff, MyPy, Pytest/coverage, Terraform fmt/validate, TFLint, Checkov, Trivy, secret scanning.
-- [ ] Add deterministic Lambda artifact build and checksum.
-- [ ] Add main workflow: artifact, Terraform plan, protected environment approval, apply, smoke tests.
-- [ ] Use GitHub OIDC; do not store long-lived AWS keys.
-- [ ] Resolve D-020 remote-state backend and deployment roles.
-- [ ] Add `docs/runbook.md` for alerts, DLQ, replay, usage ceiling, schema drift, Glue failures, and credential rotation.
-- [ ] Add `docs/cost-analysis.md` with assumptions and measured controls.
-- [ ] Add `docs/cleanup.md` with ordered Terraform/AWS cleanup commands and recovery warnings.
-- [ ] Document AWS Budget resource/console setup and notification ownership.
-- [ ] Add dependency/security update policy.
-- [ ] Lint workflows and run the complete Phase 8 check suite.
-- [ ] Update README/TASKS and report Phase 8.
-
-## Phase 9 — Integration and portfolio hardening
-
-- [ ] Add opt-in moto/local integration suite behind `CRYPTOPULSE_RUN_INTEGRATION=1`.
-- [ ] Add separately authorized one-request live Demo smoke test behind `CRYPTOPULSE_ALLOW_LIVE_API=1`.
-- [ ] Deploy dev/demo infrastructure through approved workflow.
-- [ ] Populate the secret value outside Terraform from a protected source.
-- [ ] Validate every schedule, Lambda metric/log, counter threshold simulation, S3 contract, and DLQ path.
-- [ ] Run Glue fixtures, verify Catalog partitions, and execute Athena smoke/reconciliation queries.
-- [ ] Validate dashboard attribution, disclaimers, freshness, and read-only IAM.
-- [ ] Validate cleanup in a disposable environment.
-- [ ] Add architecture evidence/screenshots with no account IDs or secrets.
-- [ ] Resolve D-021 repository license decision.
-- [ ] Complete final security/cost review and update all documentation.
-- [ ] Report final commands, results, residual risks, and portfolio usage instructions.
+- [ ] Keep AWS deployment and validation blocked until the account is unlocked and separately approved.
+- [ ] Add AWS Secrets Manager, S3, DynamoDB, CloudWatch, and event-source adapters behind existing ports.
+- [ ] Add a thin Lambda adapter that composes the same `JobRunner` through dependency injection.
+- [ ] Add Terraform source only for storage, usage counter, Lambda, Scheduler, SQS, alarms, IAM, Catalog, Glue, Athena, and required tags.
+- [ ] Keep secret values outside Terraform state and Lambda environment declarations.
+- [ ] Add source-only CI checks for Terraform and AWS adapters without credentials or AWS calls.
+- [ ] Keep Athena SQL explicitly AWS-unvalidated until an approved deployment exists.
+- [ ] Do not claim any AWS feature is deployed based on source code, mocks, local containers, or static validation.
+- [ ] Resolve D-020 before any shared plan/apply workflow.
+- [ ] Add deployment, runbook, cost, cleanup, and AWS integration work only after separate authorization.
 
 ## Persistent acceptance criteria
 
 - [ ] No committed, printed, logged, planned, or state-stored API key.
+- [ ] `.env` remains local, ignored, and untracked; `.env.example` contains names only.
 - [ ] No unit/contract CI job can reach CoinGecko.
+- [ ] Live CoinGecko use requires explicit opt-in and is excluded from normal tests and CI.
+- [ ] `data/bronze/`, `data/silver/`, `data/gold/`, `data/quarantine/`, and `data/checkpoints/` remain ignored and untracked.
 - [ ] No unverified CoinGecko endpoint or parameter.
 - [ ] No successful response refetched because an S3 write failed.
 - [ ] Estimated outbound attempt 9,001 is atomically blocked.
@@ -181,4 +164,6 @@ Legend: `[ ]` pending, `[x]` complete. A phase is complete only when its require
 - [ ] No `coin_id` partitioning.
 - [ ] Every taggable AWS resource has all four required tags.
 - [ ] No prohibited service appears in Terraform or architecture.
+- [ ] No AWS feature is described as deployed until an approved deployment and AWS validation both succeed.
+- [ ] Athena SQL remains marked AWS-unvalidated until it runs in an approved account.
 - [ ] Every phase stops on a failed required check.

@@ -26,6 +26,20 @@
 
 `decimal(38,18)` leaves twenty integer digits. Any value that cannot be safely cast is quarantined rather than silently rounded or converted to double.
 
+## Local storage mapping
+
+The logical Bronze, Silver, Gold, quarantine, partition, and business-key contracts in this document are unchanged. Local adapters map them under these repository-relative runtime roots:
+
+| Layer/state | Local root | Physical format |
+|---|---|---|
+| Bronze | `data/bronze/` | one immutable gzip JSON envelope per successful response |
+| Silver | `data/silver/` | Snappy Parquet in `snapshot_date` and run-scoped paths |
+| Gold | `data/gold/` | Snappy Parquet in `snapshot_date` and run-scoped paths |
+| Quarantine/reports | `data/quarantine/` | gzip JSON records, schema-drift manifests, and quality reports |
+| Checkpoints | `data/checkpoints/` | adapter-owned atomic checkpoint metadata; never source data |
+
+All five roots are local-only and must remain ignored and untracked. `snapshot_date` remains the only required data partition key, `coin_id` is never a partition key, and each transform run writes to a unique `run_id` path. Deferred S3 adapters remove the leading `data/` root while preserving the remaining logical layout and contracts.
+
 ## Bronze contract
 
 ### Envelope
@@ -478,7 +492,9 @@ Schema-drift manifests are batch-level records containing expected/observed sche
 
 ## Partition publication and recovery
 
-Each transform writes a complete rebuilt `snapshot_date` partition to a new `run_id` prefix. After row, duplicate, and reconciliation checks pass, Glue updates the Data Catalog partition location to that prefix. A failed run cannot expose partial output through the Catalog. Previous prefixes remain available for rollback until lifecycle cleanup. This pattern avoids in-place mutation and duplicate Parquet files without adding an open table format that the project did not request.
+Each local transform writes a complete rebuilt `snapshot_date` partition to a new `run_id` path. After row, duplicate, and reconciliation checks pass, a local selected-run manifest may publish that run to DuckDB and Streamlit consumers. A failed run cannot replace the last validated selection, and previous run paths remain available for local rollback or deliberate cleanup.
+
+In Deferred Local Phase 8, the same contract maps to an S3 run-scoped prefix followed by a Glue Data Catalog partition-location update. That AWS publication path and all Athena SQL remain AWS-unvalidated while the account is locked. Both adapters avoid in-place mutation and duplicate Parquet files without adding an open table format that the project did not request.
 
 ## Schema evolution policy
 
